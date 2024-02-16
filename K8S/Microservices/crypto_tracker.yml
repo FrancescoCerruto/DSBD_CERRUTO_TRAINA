@@ -1,0 +1,71 @@
+apiVersion: v1
+kind: Service
+metadata:
+  # before update - name: cryptotracker-service
+  name: cryptotracker
+  namespace: dsbd
+spec:
+  selector:
+    app: cryptotracker
+  ports:
+    - protocol: TCP
+      port: 5000
+      targetPort: 5000
+      name: pod
+    - port: 9000
+      targetPort: 9000
+      name: exporter
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  # before update - name: cryptotracker-deploy
+  name: cryptotracker
+  namespace: dsbd
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cryptotracker
+  template:
+    metadata:
+      labels:
+        app: cryptotracker
+    spec:
+      containers:
+        # before update - name: cryptotracker-container
+        - name: cryptotracker
+          image: francescocerruto/cryptotracker:2.0
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5000
+          env:
+            - name: MYSQL_DATABASE
+              value: dsbd_data
+            - name: MYSQL_HOST
+              value: "cryptodb"
+            - name: MYSQL_ROOT_PASSWORD
+              value: root
+            - name: UPDATE_TIME_MINUTE
+              value: "10"
+            - name: BROKER_KAFKA
+              value: "kafka:9092"
+            - name: CRYPTO_UPDATE_TOPIC
+              value: cryptoupdate
+            - name: PROMETHEUS_PORT
+              value: "9000"
+            - name: ERROR_METRICS
+              value: number_error
+            - name: KAFKA_METRICS
+              value: delivery_time
+            - name: OPERATION_METRICS
+              value: number_operation
+            - name: ERROR_RATE
+              value: error_rate
+            - name: LABEL
+              value: crypto
+            - name: PYTHONUNBUFFERED
+              value: "1"
+

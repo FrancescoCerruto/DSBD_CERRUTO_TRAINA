@@ -1,0 +1,59 @@
+apiVersion: v1
+kind: Service
+metadata:
+  # before update - name: slamanager-service
+  name: slamanager
+  namespace: dsbd
+spec:
+  selector:
+    app: slamanager
+  ports:
+    - protocol: TCP
+      port: 5000
+      targetPort: 5000
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  # before update - name: slamanager-deploy
+  name: slamanager
+  namespace: dsbd
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: slamanager
+  template:
+    metadata:
+      labels:
+        app: slamanager
+    spec:
+      containers:
+        # before update - name: slamanager-container
+        - name: slamanager
+          image: francescocerruto/slamanager:2.0
+          ports:
+            - containerPort: 5000
+          env:
+            - name: MONGO_DB
+              value: "dsbd_sla"
+            - name: MONGO_HOST
+              value: "sladb"
+            - name: PROMETHEUS_SERVER
+              value: "prometheus"
+            - name: KAFKA_METRICS
+              value: "delivery_time"
+            - name: ERROR_RATE
+              value: "error_rate"
+            - name: CRYPTO_LABEL
+              value: "crypto"
+            - name: NOTIFIER_LABEL
+              value: "notifier"
+            - name: PORTFOLIO_LABEL
+              value: "portfolio"
+            - name: SUBSCRIPTION_LABEL
+              value: "subscription"
+            - name: PYTHONUNBUFFERED
+              value: "1"

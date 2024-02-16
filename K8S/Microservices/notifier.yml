@@ -1,0 +1,77 @@
+apiVersion: v1
+kind: Service
+metadata:
+  # before update - name: notifier-service
+  name: notifier
+  namespace: dsbd
+spec:
+  selector:
+    app: notifier
+  ports:
+    - protocol: TCP
+      port: 5000
+      targetPort: 5000
+      name: pod
+    - port: 9000
+      targetPort: 9000
+      name: exporter
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  # before update - name: notifier-deploy
+  name: notifier
+  namespace: dsbd
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: notifier
+  template:
+    metadata:
+      labels:
+        app: notifier
+    spec:
+      containers:
+        # before update - name: notifier-container
+        - name: notifier
+          image: francescocerruto/notifier:2.0
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5000
+          env:
+            # before update - token key not specified as secret - volume removed
+            - name: TOKEN_KEY
+              value: "dsbd_2024"
+            - name: MYSQL_DATABASE
+              value: dsbd_data
+              # modificato
+            - name: MYSQL_HOST
+              value: "notificationdb"
+            - name: MYSQL_ROOT_PASSWORD
+              value: root
+            - name: BROKER_KAFKA
+              value: "kafka:9092"
+            - name: ALERT_TOPIC
+              value: alert
+            - name: SMTP_SERVER
+              value: smtp.gmail.com
+            - name: SENDER_EMAIL
+              value: _____________________________________
+            - name: APP_PASSWORD
+              value: _____________________________________
+            - name: PROMETHEUS_PORT
+              value: "9000"
+            - name: ERROR_METRICS
+              value: number_error
+            - name: OPERATION_METRICS
+              value: number_operation
+            - name: ERROR_RATE
+              value: error_rate
+            - name: LABEL
+              value: notifier
+            - name: PYTHONUNBUFFERED
+              value: "1"
+

@@ -1,0 +1,525 @@
+version: "3.8"
+
+networks:
+  # interaction with client --> API gateway
+  frontend:
+  # microservices with user data --> user and notifier
+  manager:
+  # database
+  database:
+  # kafka actors
+  kafka:
+  # quality of service
+  qos:
+
+volumes:
+  # persistence data mysql
+  crypto:
+  notification:
+  user:
+  subtrack:
+  porttrack:
+  sla:
+  # before update - token volume --> shared symmetric key token
+  # prometheus data
+  prometheus:
+
+services:
+  # database section
+  # mysql - crypto data table
+  cryptodb:
+    # before update: image: mysql:5.6
+    image: francescocerruto/cryptodb:2.0
+    build:
+      context: Database/Mysql
+      dockerfile: Dockerfile
+    networks:
+      - database # my net
+    container_name: cryptodb
+    environment:
+      # mysql environment
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+    ports:
+      - ${CRYPTO_DB_PORT}:3306
+    volumes:
+      # persistent volume
+      - crypto:/var/lib/Initializer
+    healthcheck:
+      test: mysqladmin ping -h 127.0.0.1 -u root --password=$$MYSQL_ROOT_PASSWORD
+      start_period: 5s
+      interval: 5s
+      timeout: 5s
+      retries: 55
+    restart: always
+
+  # mysql - update, subscription and portfolio_action data table
+  notificationdb:
+    # before update: image: mysql:5.6
+    image: francescocerruto/notificationdb:2.0
+    build:
+      context: Database/Mysql
+      dockerfile: Dockerfile
+    networks:
+      - database # my net
+    container_name: notificationdb
+    environment:
+      # mysql environment
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+    ports:
+      - ${NOTIFICATION_DB_PORT}:3306
+    volumes:
+      # persistent volume
+      - notification:/var/lib/Initializer
+    healthcheck:
+      test: mysqladmin ping -h 127.0.0.1 -u root --password=$$MYSQL_ROOT_PASSWORD
+      start_period: 5s
+      interval: 5s
+      timeout: 5s
+      retries: 55
+    restart: always
+
+  # mysql - subscription, portfolio_action, user and portfolio data table
+  userdb:
+    # before update: image: mysql:5.6
+    image: francescocerruto/userdb:2.0
+    build:
+      context: Database/Mysql
+      dockerfile: Dockerfile
+    networks:
+      - database # my net
+    container_name: userdb
+    environment:
+      # mysql environment
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+    ports:
+      - ${USER_DB_PORT}:3306
+    volumes:
+      # persistent volume
+      - user:/var/lib/Initializer
+    healthcheck:
+      test: mysqladmin ping -h 127.0.0.1 -u root --password=$$MYSQL_ROOT_PASSWORD
+      start_period: 5s
+      interval: 5s
+      timeout: 5s
+      retries: 55
+    restart: always
+
+  # mysql - copy of subscription table of userdb - scaling
+  subtrackdb:
+    # before update: image: mysql:5.6
+    image: francescocerruto/subtrackdb:2.0
+    build:
+      context: Database/Mysql
+      dockerfile: Dockerfile
+    networks:
+      - database # my net
+    container_name: subtrackdb
+    environment:
+      # mysql environment
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+    ports:
+      - ${SUB_TRACK_DB_PORT}:3306
+    volumes:
+      # persistent volume
+      - subtrack:/var/lib/Initializer
+    healthcheck:
+      test: mysqladmin ping -h 127.0.0.1 -u root --password=$$MYSQL_ROOT_PASSWORD
+      start_period: 5s
+      interval: 5s
+      timeout: 5s
+      retries: 55
+    restart: always
+
+  # mysql - copy of portfolio_action table of userdb - scaling
+  porttrackdb:
+    # before update: image: mysql:5.6
+    image: francescocerruto/porttrackdb:2.0
+    build:
+      context: Database/Mysql
+      dockerfile: Dockerfile
+    networks:
+      - database # my net
+    container_name: porttrackdb
+    environment:
+      # mysql environment
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+    ports:
+      - ${PORT_TRACK_DB_PORT}:3306
+    volumes:
+      # persistent volume
+      - porttrack:/var/lib/Initializer
+    healthcheck:
+      test: mysqladmin ping -h 127.0.0.1 -u root --password=$$MYSQL_ROOT_PASSWORD
+      start_period: 5s
+      interval: 5s
+      timeout: 5s
+      retries: 55
+    restart: always
+
+  sladb:
+    # before update: image: mongo:7.0.5
+    image: francescocerruto/sladb:2.0
+    build:
+      context: Database/Mongo
+      dockerfile: Dockerfile
+    networks:
+      - qos # my net
+    container_name: sladb
+    environment:
+      - MONGO_DATABASE=${MONGO_DATABASE}
+    ports:
+      - ${SLA_PORT}:27017
+    volumes:
+      # persistent volume
+      - sla:/data/db
+    restart: always
+
+  # manager section
+  usermanager:
+    image: francescocerruto/usermanager:2.0
+    build:
+      context: User
+      dockerfile: ../Dockerfile
+    networks:
+      - manager # my net
+      - database # need interaction with db
+      - qos # need interaction with prometheus
+      - kafka # need interaction with kafka
+    ports:
+      - "5000"
+    depends_on:
+      userdb:
+        condition: service_healthy
+      cryptotracker: # access point crypto db
+        condition: service_started
+      # kafka section
+      init-kafka-container:
+        condition: service_completed_successfully
+      kafka:
+        condition: service_healthy
+    restart: always
+    # before update volume token mounted in /app/token_key
+    # microservice write into file token key
+    # now token key is user defined and stored as environment variable
+    environment:
+      # token
+      - TOKEN_KEY=${TOKEN_KEY}
+      # mysql environment
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_HOST=userdb
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      # kafka environment
+      - BROKER_KAFKA=kafka:9092
+      - PURCHASE_UPDATE_TOPIC=${PURCHASE_UPDATE_TOPIC}
+      - SUBSCRIPTION_UPDATE_TOPIC=${SUBSCRIPTION_UPDATE_TOPIC}
+      # PROMETHEUS ENVIRONMNET
+      - PROMETHEUS_PORT=${USER_PORT}
+      - ERROR_METRICS=${ERROR_METRICS}
+      - KAFKA_METRICS=${KAFKA_METRICS}
+      - OPERATION_METRICS=${OPERATION_METRICS}
+      - ERROR_RATE=${ERROR_RATE}
+      - LABEL=${USER_LABEL}
+      # print debug
+      - PYTHONUNBUFFERED=1
+
+  # kafka section
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    container_name: zookeeper
+    networks:
+      - kafka # my net
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    restart: always
+
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    networks:
+      - kafka # my net
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    restart: always
+    ports:
+      # gate from host machine
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    healthcheck:
+      test: kafka-topics --bootstrap-server kafka:9092 --list
+      interval: 30s
+      timeout: 50s
+      retries: 3
+
+  init-kafka-container:
+    image: confluentinc/cp-kafka:latest
+    networks:
+      - kafka # my net
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      # kafka environment
+      - CRYPTO_UPDATE_TOPIC=${CRYPTO_UPDATE_TOPIC}
+      - PURCHASE_UPDATE_TOPIC=${PURCHASE_UPDATE_TOPIC}
+      - SUBSCRIPTION_UPDATE_TOPIC=${SUBSCRIPTION_UPDATE_TOPIC}
+      - ALERT_TOPIC=${ALERT_TOPIC}
+      # parameter execution
+      - NUM_CRYPTO_SERVICE=${NUM_CRYPTO_SERVICE}
+    entrypoint: [ '/bin/sh', '-c' ]
+    command: |
+      "
+      # create init topics
+      kafka-topics --create --if-not-exists --topic ${CRYPTO_UPDATE_TOPIC} --partitions ${NUM_CRYPTO_SERVICE} --replication-factor 1 --bootstrap-server kafka:9092
+      kafka-topics --create --if-not-exists --topic ${PURCHASE_UPDATE_TOPIC} --partitions ${NUM_CRYPTO_SERVICE} --replication-factor 1 --bootstrap-server kafka:9092
+      kafka-topics --create --if-not-exists --topic ${SUBSCRIPTION_UPDATE_TOPIC} --partitions ${NUM_CRYPTO_SERVICE} --replication-factor 1 --bootstrap-server kafka:9092
+      kafka-topics --create --if-not-exists --topic ${ALERT_TOPIC} --partitions ${NUM_CRYPTO_SERVICE} --replication-factor 1 --bootstrap-server kafka:9092
+      "
+
+  cryptotracker:
+    image: francescocerruto/cryptotracker:2.0
+    build:
+      context: CryptoTracker
+      dockerfile: ../Dockerfile
+    networks:
+      - manager # my net
+      - kafka # need interaction with db
+      - database # need interaction with db
+      - qos # need interaction with prometheus
+    depends_on:
+      cryptodb:
+        condition: service_healthy
+      # kafka section
+      init-kafka-container:
+        condition: service_completed_successfully
+      kafka:
+        condition: service_healthy
+    restart: always
+    ports:
+      - "5000"
+    environment:
+      # mysql environment
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_HOST=cryptodb
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      # API update time is 1 hour - for testing here 5 minutes - parameter execution
+      - UPDATE_TIME_MINUTE=10
+      # kafka environment
+      - BROKER_KAFKA=kafka:9092
+      - CRYPTO_UPDATE_TOPIC=${CRYPTO_UPDATE_TOPIC}
+      # PROMETHEUS ENVIRONMNET
+      - PROMETHEUS_PORT=${CRYPTO_PORT}
+      - ERROR_METRICS=${ERROR_METRICS}
+      - KAFKA_METRICS=${KAFKA_METRICS}
+      - OPERATION_METRICS=${OPERATION_METRICS}
+      - ERROR_RATE=${ERROR_RATE}
+      - LABEL=${CRYPTO_LABEL}
+      # print debug
+      - PYTHONUNBUFFERED=1
+
+  notifier:
+    image: francescocerruto/notifier:2.0
+    build:
+      context: Notifier
+      dockerfile: ../Dockerfile
+    networks:
+      - manager # my net
+      - database # need interaction with db
+      - qos # need interaction with prometheus
+      - kafka # need interaction with kafka
+    ports:
+      - "5000"
+    depends_on:
+      notificationdb:
+        condition: service_healthy
+      # kafka section
+      init-kafka-container:
+        condition: service_completed_successfully
+      kafka:
+        condition: service_healthy
+    # before update volume token mounted in /app/token_key
+    # microservice read from file token key
+    # now token key is user defined and stored as environment variable
+    environment:
+      # token
+      - TOKEN_KEY=${TOKEN_KEY}
+      # mysql environment
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_HOST=notificationdb
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      # kafka environment
+      - BROKER_KAFKA=kafka:9092
+      - ALERT_TOPIC=${ALERT_TOPIC}
+      # google environment
+      - SMTP_SERVER=${SMTP_SERVER}
+      - SENDER_EMAIL=${SENDER_EMAIL}
+      - APP_PASSWORD=${APP_PASSWORD}
+      # PROMETHEUS ENVIRONMNET
+      - PROMETHEUS_PORT=${NOTIFIER_PORT}
+      - ERROR_METRICS=${ERROR_METRICS}
+      - OPERATION_METRICS=${OPERATION_METRICS}
+      - ERROR_RATE=${ERROR_RATE}
+      - LABEL=${NOTIFIER_LABEL}
+      # print debug
+      - PYTHONUNBUFFERED=1
+    restart: always
+
+  portfoliotracker:
+    image: francescocerruto/portfoliotracker:2.0
+    build:
+      context: PortfolioTracker
+      dockerfile: ../Dockerfile
+    networks:
+      - kafka # my net
+      - database # need interaction with port_track_db
+      - qos # need interaction with prometheus
+    depends_on:
+      porttrackdb:
+        condition: service_healthy
+      # kafka section
+      init-kafka-container:
+        condition: service_completed_successfully
+      kafka:
+        condition: service_healthy
+    restart: always
+    environment:
+      # mysql environment
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_HOST=porttrackdb
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      # kafka environment
+      - BROKER_KAFKA=kafka:9092
+      # topic as consumer
+      - CRYPTO_UPDATE_TOPIC=${CRYPTO_UPDATE_TOPIC}
+      - PURCHASE_UPDATE_TOPIC=${PURCHASE_UPDATE_TOPIC}
+      # topic as producer
+      - ALERT_TOPIC=${ALERT_TOPIC}
+      # PROMETHEUS ENVIRONMNET
+      - PROMETHEUS_PORT=${PORTFOLIO_PORT}
+      - ERROR_METRICS=${ERROR_METRICS}
+      - KAFKA_METRICS=${KAFKA_METRICS}
+      - OPERATION_METRICS=${OPERATION_METRICS}
+      - ERROR_RATE=${ERROR_RATE}
+      - LABEL=${PORTFOLIO_LABEL}
+      # print debug
+      - PYTHONUNBUFFERED=1
+
+  subscriptiontracker:
+    image: francescocerruto/subscriptiontracker:2.0
+    build:
+      context: SubscriptionTracker
+      dockerfile: ../Dockerfile
+    networks:
+      - kafka # my net
+      - database # need interaction with sub_track_db
+      - qos # need interaction with prometheus
+    depends_on:
+      subtrackdb:
+        condition: service_healthy
+      # kafka section
+      init-kafka-container:
+        condition: service_completed_successfully
+      kafka:
+        condition: service_healthy
+    restart: always
+    environment:
+      # mysql environment
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_HOST=subtrackdb
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      # kafka environment
+      - BROKER_KAFKA=kafka:9092
+      # topic as consumer
+      - CRYPTO_UPDATE_TOPIC=${CRYPTO_UPDATE_TOPIC}
+      - SUBSCRIPTION_UPDATE_TOPIC=${SUBSCRIPTION_UPDATE_TOPIC}
+      # topic as producer
+      - ALERT_TOPIC=${ALERT_TOPIC}
+      # PROMETHEUS ENVIRONMNET
+      - PROMETHEUS_PORT=${SUBSCRIPTION_PORT}
+      - ERROR_METRICS=${ERROR_METRICS}
+      - KAFKA_METRICS=${KAFKA_METRICS}
+      - OPERATION_METRICS=${OPERATION_METRICS}
+      - ERROR_RATE=${ERROR_RATE}
+      - LABEL=${SUBSCRIPTION_LABEL}
+      # print debug
+      - PYTHONUNBUFFERED=1
+
+  # frontend section
+  # load balancer
+  nginx:
+    container_name: apigateway
+    build:
+      context: nginx
+    networks:
+      - frontend # my net
+      - manager # need interaction with user and notifier
+      - qos # need interaction with sla_manager
+    # bind mount configuration
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "80:80"
+    depends_on:
+      usermanager:
+        condition: service_started
+      notifier:
+        condition: service_started
+      slamanager:
+        condition: service_started
+    restart: always
+
+  # qos section
+  prometheus:
+    # before update - image: prom/prometheus
+    image: francescocerruto/prometheus:2.0
+    build:
+      context: prometheus
+      dockerfile: Dockerfile
+    ports:
+      - ${PROMETHEUS_PORT}:9090
+    restart: always
+    networks:
+      - qos # my net
+    volumes:
+      # volume
+      - prometheus:/prometheus
+
+  slamanager:
+    image: francescocerruto/slamanager:2.0
+    build:
+      context: SLA
+      dockerfile: ../Dockerfile
+    networks:
+      - qos # my net
+    depends_on:
+      - sladb
+      - prometheus
+    environment:
+      # mongo environment
+      - MONGO_DB=${MONGO_INITDB_DATABASE}
+      - MONGO_HOST=sladb
+      # prometheus environment
+      - PROMETHEUS_SERVER=prometheus
+      - KAFKA_METRICS=${KAFKA_METRICS}
+      - ERROR_RATE=${ERROR_RATE}
+      - CRYPTO_LABEL=${CRYPTO_LABEL}
+      - NOTIFIER_LABEL=${NOTIFIER_LABEL}
+      - PORTFOLIO_LABEL=${PORTFOLIO_LABEL}
+      - SUBSCRIPTION_LABEL=${SUBSCRIPTION_LABEL}
+      - USER_LABEL=${USER_LABEL}
+      # print debug
+      - PYTHONUNBUFFERED=1
+    restart: always

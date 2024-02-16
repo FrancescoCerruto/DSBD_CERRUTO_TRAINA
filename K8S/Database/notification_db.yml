@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: notificationdb
+  namespace: dsbd
+spec:
+  serviceName: "notificationdb"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: notificationdb
+  template:
+    metadata:
+      labels:
+        app: notificationdb
+    spec:
+      containers:
+        - name: notificationdb
+          # before update - image: mysql:5.6
+          image: francescocerruto/notificationdb:2.0
+          ports:
+            - containerPort: 3306
+          volumeMounts:
+            - name: notification
+              mountPath: /var/lib/Initializer
+          env:
+          - name: MYSQL_ROOT_PASSWORD
+            value: root
+          - name: MYSQL_DATABASE
+            value: dsbd_data
+  volumeClaimTemplates:
+    - metadata:
+        name: notification
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: 100Mi
+
+---
+
+# mysql-service.yaml
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: notificationdb
+  # before update - namespace not specified
+  namespace: dsbd
+spec:
+  selector:
+    app: notificationdb
+  ports:
+    - protocol: TCP
+      port: 3306
+      targetPort: 3306
+  type: ClusterIP

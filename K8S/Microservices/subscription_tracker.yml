@@ -1,0 +1,69 @@
+apiVersion: v1
+kind: Service
+metadata:
+  # before update - name: subscriptiontracker-service
+  name: subscriptiontracker
+  namespace: dsbd
+spec:
+  selector:
+    app: subscriptiontracker
+  ports:
+    - port: 9000
+      targetPort: 9000
+      name: exporter
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  # before update - name: subscriptiontracker-deploy
+  name: subscriptiontracker
+  namespace: dsbd
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: subscriptiontracker
+  template:
+    metadata:
+      labels:
+        app: subscriptiontracker
+    spec:
+      containers:
+        # before update - name: subscriptiontracker-container
+        - name: subscriptiontracker
+          image: francescocerruto/subscriptiontracker:2.0
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5000
+          env:
+            - name: MYSQL_DATABASE
+              value: dsbd_data
+            - name: MYSQL_HOST
+              value: "subtrackdb"
+            - name: MYSQL_ROOT_PASSWORD
+              value: root
+            - name: BROKER_KAFKA
+              value: "kafka:9092"
+            - name: CRYPTO_UPDATE_TOPIC
+              value: cryptoupdate
+            - name: SUBSCRIPTION_UPDATE_TOPIC
+              value: subscriptionupdate
+            - name: ALERT_TOPIC
+              value: alert
+            - name: PROMETHEUS_PORT
+              value: "9000"
+            - name: ERROR_METRICS
+              value: number_error
+            - name: KAFKA_METRICS
+              value: delivery_time
+            - name: OPERATION_METRICS
+              value: number_operation
+            - name: ERROR_RATE
+              value: error_rate
+            - name: LABEL
+              value: subscription
+            - name: PYTHONUNBUFFERED
+              value: "1"
+

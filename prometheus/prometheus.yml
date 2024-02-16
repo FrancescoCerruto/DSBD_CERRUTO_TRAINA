@@ -1,0 +1,29 @@
+global:
+  scrape_interval:  15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: user
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['usermanager:9000']
+
+  - job_name: crypto
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['cryptotracker:9000']
+
+  - job_name: notifier
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['notifier:9000']
+
+  - job_name: portfolio
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['portfoliotracker:9000']
+
+  - job_name: subscription
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['subscriptiontracker:9000']

@@ -1,0 +1,94 @@
+# before update - service: x-service
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: my-ingress
+  namespace: dsbd
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+spec:
+  ingressClassName: "nginx"
+  rules:
+    - host: localhost
+      http:
+        paths:
+          - pathType: Exact
+            path: /login
+            backend:
+              service:
+                name: usermanager
+                port:
+                  number: 5000
+
+          - pathType: Exact
+            path: /register
+            backend:
+              service:
+                name: usermanager
+                port:
+                  number: 5000
+
+          - pathType: Exact
+            path: /subscription_user
+            backend:
+              service:
+                name: usermanager
+                port:
+                  number: 5000
+
+          - pathType: Exact
+            path: /portfolio_action_user
+            backend:
+              service:
+                name: usermanager
+                port:
+                  number: 5000
+
+          - pathType: Exact
+            path: /overview_portfolio_user
+            backend:
+              service:
+                name: usermanager
+                port:
+                  number: 5000
+
+          - pathType: Exact
+            path: /get_alert_user
+            backend:
+              service:
+                name: notifier
+                port:
+                  number: 5000
+
+          - pathType: Exact
+            path: /status_sla
+            backend:
+              service:
+                name: slamanager
+                port:
+                  number: 5000
+
+          - pathType: Exact
+            path: /get_violation
+            backend:
+              service:
+                name: slamanager
+                port:
+                  number: 5000
+
+          - pathType: Exact
+            path: /create_slo
+            backend:
+              service:
+                name: slamanager
+                port:
+                  number: 5000
+
+          - pathType: Exact
+            path: /delete_slo
+            backend:
+              service:
+                name: slamanager
+                port:
+                  number: 5000

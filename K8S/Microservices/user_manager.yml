@@ -1,0 +1,73 @@
+apiVersion: v1
+kind: Service
+metadata:
+  # before update - name: usermanager-service
+  name: usermanager
+  namespace: dsbd
+spec:
+  selector:
+    app: usermanager
+  ports:
+    - protocol: TCP
+      port: 5000
+      targetPort: 5000
+      name: pod
+    - port: 9000
+      targetPort: 9000
+      name: exporter
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  # before update - name: usermanager-deploy
+  name: usermanager
+  namespace: dsbd
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: usermanager
+  template:
+    metadata:
+      labels:
+        app: usermanager
+    spec:
+      containers:
+        # before update - name: usermanager-container
+        - name: usermanager
+          image: francescocerruto/usermanager:2.0
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5000
+          env:
+            # before update - token key not specified as secret - volume removed
+            - name: TOKEN_KEY
+              value: "dsbd_2024"
+            - name: MYSQL_DATABASE
+              value: dsbd_data
+            - name: MYSQL_HOST
+              value: "userdb"
+            - name: MYSQL_ROOT_PASSWORD
+              value: root
+            - name: BROKER_KAFKA
+              value: "kafka:9092"
+            - name: SUBSCRIPTION_UPDATE_TOPIC
+              value: subscriptionupdate
+            - name: PURCHASE_UPDATE_TOPIC
+              value: purchaseupdate
+            - name: PROMETHEUS_PORT
+              value: "9000"
+            - name: ERROR_METRICS
+              value: number_error
+            - name: KAFKA_METRICS
+              value: delivery_time
+            - name: OPERATION_METRICS
+              value: number_operation
+            - name: ERROR_RATE
+              value: error_rate
+            - name: LABEL
+              value: user
+            - name: PYTHONUNBUFFERED
+              value: "1"

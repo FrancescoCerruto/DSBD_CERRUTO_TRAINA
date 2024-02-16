@@ -1,0 +1,8 @@
+#ambienti virtuali python
+**/venv/
+
+#compilazione python
+**/__pycache__/
+
+#cartella pycharm
+.idea/

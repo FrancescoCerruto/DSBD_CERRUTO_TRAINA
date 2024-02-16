@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: sladb
+  namespace: dsbd
+spec:
+  serviceName: "sladb"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sladb
+  template:
+    metadata:
+      labels:
+        app: sladb
+    spec:
+      containers:
+        - name: sladb
+          # before update - image: mongo:7.0.5
+          image: francescocerruto/sladb:2.0
+          ports:
+            - containerPort: 27017
+          volumeMounts:
+            - name: sla
+              mountPath: /data/db
+          env:
+            # before update: MONGO_INITDB_DATABASE = dsbd_sla
+            - name: MONGO_DATABASE
+              value: "dsbd_sla"
+  volumeClaimTemplates:
+    - metadata:
+        name: sla
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: 100Mi
+
+---
+
+# mongodb-service.yaml
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: sladb
+  namespace: dsbd
+spec:
+  selector:
+    app: sladb
+  ports:
+    - protocol: TCP
+      port: 27017
+      targetPort: 27017
+  type: ClusterIP

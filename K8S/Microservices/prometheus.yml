@@ -1,0 +1,52 @@
+# before update - specified config map
+# before update - image pull prom/prometheus
+# before update - service name prometheus-service
+
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: prometheus
+  namespace: dsbd
+spec:
+  serviceName: "prometheus"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      containers:
+        - name: prometheus
+          image: francescocerruto/prometheus:2.0
+          ports:
+            - containerPort: 9090
+          volumeMounts:
+            - name: prometheus-volume
+              mountPath: /prometheus
+  volumeClaimTemplates:
+    - metadata:
+        name: prometheus-volume
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: 1Gi
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: dsbd
+spec:
+  selector:
+    app: prometheus
+  ports:
+    - protocol: TCP
+      port: 9090
+      targetPort: 9090
+
